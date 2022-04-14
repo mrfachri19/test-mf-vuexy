@@ -1,0 +1,44 @@
+
+image: docker:19.03.8
+
+variables:
+  DOCKER_HOST: tcp://docker:2375/
+  DOCKER_DRIVER: overlay2
+  # See https://github.com/docker-library/docker/pull/166
+  DOCKER_TLS_CERTDIR: ""
+
+stages:    
+  - build
+  - deploy
+  
+services:
+  - docker:19.03.8-dind
+
+build-image:
+  tags:
+    - dev
+    - docker
+  stage: build
+  before_script:
+    - docker login -u $NEXUSUSER -p $NEXUSPASS $NEXUSURL
+  script:    
+    - docker build -t diarium-react-dev:latest .
+    - docker tag diarium-react-dev:latest $NEXUSURL/hcmr/development/diarium-react:latest
+    - docker push $NEXUSURL/hcmr/development/diarium-react:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+
+deploy-image:
+  tags:
+    - dev 
+    - docker
+  stage: deploy
+  image:
+    name: openshift/origin-cli
+  before_script:
+    - oc login $OSHSERVER -u $OSHUSER -p $OSHPASS --insecure-skip-tls-verify
+  script:  
+    - oc project development  
+    - oc rollout latest deploymentConfig/diarium-react
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
